@@ -11,16 +11,17 @@ using Splatoon.SplatoonScripting.Priority;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SplatoonScriptsOfficial.Duties.Endwalker.The_Omega_Protocol;
+namespace SplatoonScriptsOfficial.Duties.Endwalker.The_Omega_Protocol
+{
 
 public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
 {
-    private static readonly string[] Slots = ["MT", "ST", "H1", "H2", "D1", "D2", "D3", "D4"];
-    private static readonly string[] THSlots = ["MT", "ST", "H1", "H2"];
-    private static readonly string[] DPSSlots = ["D1", "D2", "D3", "D4"];
+    private static readonly string[] Slots = new string[] { "MT", "ST", "H1", "H2", "D1", "D2", "D3", "D4" };
+    private static readonly string[] THSlots = new string[] { "MT", "ST", "H1", "H2" };
+    private static readonly string[] DPSSlots = new string[] { "D1", "D2", "D3", "D4" };
 
-    public override HashSet<uint>? ValidTerritories { get; } = [1122];
-    public override Metadata? Metadata => new(2, "kudry + Codex");
+    public override HashSet<uint>? ValidTerritories { get; } = new HashSet<uint>() { 1122 };
+    public override Metadata? Metadata => new Metadata(2, "kudry + Codex");
 
     private Config Conf => Controller.GetConfig<Config>();
 
@@ -508,7 +509,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
     {
         public bool IsDebug = false;
         public string BasePlayerOverride = "";
-        public PriorityData PriorityData = new();
+        public PriorityData PriorityData = new PriorityData();
     }
 }
 
@@ -518,4 +519,5 @@ public static class CrossOWCExtensions
     {
         return player.StatusList.Any(x => x.StatusId == 3452 || x.StatusId == 3453);
     }
+}
 }
