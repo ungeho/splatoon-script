@@ -4,6 +4,7 @@ using Dalamud.Bindings.ImGui;
 using ECommons;
 using ECommons.Configuration;
 using ECommons.DalamudServices;
+using ECommons.DalamudServices.Legacy;
 using ECommons.GameHelpers;
 using ECommons.ImGuiMethods;
 using Splatoon.SplatoonScripting;
@@ -15,14 +16,24 @@ namespace SplatoonScriptsOfficial.Duties.Endwalker.The_Omega_Protocol;
 
 public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
 {
-    private static readonly string[] Slots = ["MT", "ST", "H1", "H2", "D1", "D2", "D3", "D4"];
-    private static readonly string[] THSlots = ["MT", "ST", "H1", "H2"];
-    private static readonly string[] DPSSlots = ["D1", "D2", "D3", "D4"];
+    private static readonly string[] Slots = { "MT", "ST", "H1", "H2", "D1", "D2", "D3", "D4" };
+    private static readonly string[] THSlots = { "MT", "ST", "H1", "H2" };
+    private static readonly string[] DPSSlots = { "D1", "D2", "D3", "D4" };
 
-    public override HashSet<uint>? ValidTerritories { get; } = [1122];
-    public override Metadata? Metadata => new(2, "kudry + Codex");
+    public override HashSet<uint> ValidTerritories { get; } = new HashSet<uint>() { 1122 };
+    public override Metadata Metadata => new(2, "kudry + Codex");
 
     private Config Conf => Controller.GetConfig<Config>();
+    private PriorityData PriorityData
+    {
+        get
+        {
+            if (Conf.PriorityData == null)
+                Conf.PriorityData = new PriorityData();
+
+            return Conf.PriorityData;
+        }
+    }
 
     public override void OnSetup()
     {
@@ -103,7 +114,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
     {
         ImGuiEx.Text("Priority list: MT, ST, H1, H2, D1, D2, D3, D4");
         ImGuiEx.Text("Set players in this exact order.");
-        Conf.PriorityData.Draw();
+        PriorityData.Draw();
 
         ImGui.Separator();
         ImGui.SetNextItemWidth(220);
@@ -145,8 +156,13 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
     private List<string> GetMonitorSlots(bool isSupport)
     {
         var groupSlots = isSupport ? THSlots : DPSSlots;
-        var players = Conf.PriorityData.GetPlayers(x => x.IGameObject is IPlayerCharacter).ToList();
+        var priorityPlayers = PriorityData.GetPlayers(x => x.IGameObject is IPlayerCharacter);
         var result = new List<string>();
+
+        if (priorityPlayers == null)
+            return result;
+
+        var players = priorityPlayers.ToList();
 
         for (var i = 0; i < players.Count && i < Slots.Length; i++)
         {
@@ -181,7 +197,11 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
 
     private string GetPrioritySlot(IPlayerCharacter player)
     {
-        var players = Conf.PriorityData.GetPlayers(x => x.IGameObject is IPlayerCharacter).ToList();
+        var priorityPlayers = PriorityData.GetPlayers(x => x.IGameObject is IPlayerCharacter);
+        if (priorityPlayers == null)
+            return "Unknown";
+
+        var players = priorityPlayers.ToList();
 
         for (var i = 0; i < players.Count && i < Slots.Length; i++)
         {
@@ -192,7 +212,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         return "Unknown";
     }
 
-    private IPlayerCharacter? GetBasePlayer()
+    private IPlayerCharacter GetBasePlayer()
     {
         if (!string.IsNullOrEmpty(Conf.BasePlayerOverride))
         {
@@ -212,7 +232,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         return slot is "MT" or "ST" or "H1" or "H2";
     }
 
-    private static string? ResolveGuideName(bool isSupport, uint castId, string slot, string monitorKey)
+    private static string ResolveGuideName(bool isSupport, uint castId, string slot, string monitorKey)
     {
         if (isSupport)
             return ResolveTHGuideName(castId, slot, monitorKey);
@@ -220,7 +240,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         return ResolveDPSGuideName(castId, slot, monitorKey);
     }
 
-    private static string? ResolveTHGuideName(uint castId, string slot, string monitorKey)
+    private static string ResolveTHGuideName(uint castId, string slot, string monitorKey)
     {
         return monitorKey switch
         {
@@ -332,7 +352,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         };
     }
 
-    private static string? ResolveDPSGuideName(uint castId, string slot, string monitorKey)
+    private static string ResolveDPSGuideName(uint castId, string slot, string monitorKey)
     {
         return monitorKey switch
         {
@@ -460,7 +480,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         };
     }
 
-    private static string? TankNorth(uint castId, bool monitor)
+    private static string TankNorth(uint castId, bool monitor)
     {
         if (castId == 31595)
             return monitor ? "検知あり Tank  北 31595 Right" : "検知なし Tank 北 31595 Right";
@@ -471,7 +491,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         return null;
     }
 
-    private static string? HealerNorth(uint castId, bool monitor)
+    private static string HealerNorth(uint castId, bool monitor)
     {
         if (castId == 31595)
             return monitor ? "検知あり Healer  北 31595 Right" : "検知なし Healer 北 31595 Right";
@@ -482,7 +502,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         return null;
     }
 
-    private static string? MeleeSouth(uint castId, bool monitor)
+    private static string MeleeSouth(uint castId, bool monitor)
     {
         if (castId == 31595)
             return monitor ? "検知あり Melee  南 31595 Right" : "検知なし Melee 南 31595 Right";
@@ -493,7 +513,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
         return null;
     }
 
-    private static string? RangeSouth(uint castId, bool monitor)
+    private static string RangeSouth(uint castId, bool monitor)
     {
         if (castId == 31595)
             return monitor ? "検知あり Range 南 31595 Right" : "検知なし Range 南 31595 Right";
@@ -508,7 +528,7 @@ public unsafe class TOP_Cross_Oversampled_Wave_Cannon : SplatoonScript
     {
         public bool IsDebug = false;
         public string BasePlayerOverride = "";
-        public PriorityData PriorityData = new();
+        public PriorityData PriorityData = new PriorityData();
     }
 }
 

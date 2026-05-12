@@ -22,6 +22,14 @@ FFXIV の Splatoon 用スクリプト置き場です。
 
 「検知式波動砲」の十字式攻略における立ち位置を案内するスクリプトです。
 
+#### TOP P1 Program Loop Priority Self Priority.cs
+
+P1「プログラム・ループ」の塔／線処理を優先度設定に基づいて案内するスクリプトです。設定欄に自分のP1優先度を `Priority 1` のように表示します。
+
+#### TOP P1 Pantokrator Initial Position Priority.cs
+
+P1「パントクラトル」の初期位置を、番号デバフごとのペア内優先度と詠唱角度に基づいて案内するスクリプトです。設定欄の `Script Override` で他プレイヤー視点の誘導も確認できます。
+
 ## 前提
 
 各ファイルは Dalamud / ECommons / Splatoon のスクリプト環境で動作することを想定しています。スクリプトを使用する際は、対象コンテンツ内で Splatoon のスクリプトとして読み込んでください。
