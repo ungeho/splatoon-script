@@ -65,6 +65,7 @@ public unsafe class TOP_P1_Program_Loop_Priority_With_Self_Priority : SplatoonSc
         Controller.RegisterElementFromCode("SafeSouth", "{\"Enabled\":false,\"Name\":\"\",\"refX\":100.0,\"refY\":116.0,\"radius\":4.0,\"color\":4278190080,\"Filled\":false,\"fillIntensity\":0.0,\"thicc\":5.0}");
         Controller.RegisterElementFromCode("SafeWest", "{\"Enabled\":false,\"Name\":\"\",\"refX\":84.0,\"refY\":100.0,\"radius\":4.0,\"color\":4278190080,\"Filled\":false,\"fillIntensity\":0.0,\"thicc\":5.0}");
         Controller.RegisterElementFromCode("SafeEast", "{\"Enabled\":false,\"Name\":\"\",\"refX\":116.0,\"refY\":100.0,\"radius\":4.0,\"color\":4278190080,\"Filled\":false,\"fillIntensity\":0.0,\"thicc\":5.0}");
+        Controller.RegisterElementFromCode("NonRoleSafeSpot", "{\"Name\":\"\",\"type\":0,\"Enabled\":false,\"refX\":100.0,\"refY\":100.0,\"radius\":0.8,\"color\":4278255360,\"Filled\":false,\"fillIntensity\":0.0,\"thicc\":8.0,\"tether\":true}");
     }
 
     public override void OnUpdate()
@@ -287,6 +288,7 @@ public unsafe class TOP_P1_Program_Loop_Priority_With_Self_Priority : SplatoonSc
                     }
                 }
             }
+            UpdateNonRoleSafeSpot();
         }
         else
         {
@@ -298,9 +300,112 @@ public unsafe class TOP_P1_Program_Loop_Priority_With_Self_Priority : SplatoonSc
             Controller.GetElementByName("SelfPairPriority").Enabled = false;
             Controller.GetElementByName("dbg1").Enabled = false;
             Controller.GetElementByName("dbg2").Enabled = false;
+            Controller.GetElementByName("NonRoleSafeSpot").Enabled = false;
             if (Controller.TryGetLayoutByName("Proximity", out var l)) { l.Enabled = false; }
             SwitchTetherSafeSpots(false);
         }
+    }
+
+    private void UpdateNonRoleSafeSpot()
+    {
+        if (!Controller.TryGetElementByName("NonRoleSafeSpot", out var e))
+        {
+            return;
+        }
+
+        var localPlayer = Svc.ClientState.LocalPlayer;
+        if (localPlayer == null
+            || Conf.Towers == TowerStartPoint.Disable_towers
+            || IsTakingCurrentTether(localPlayer.EntityId)
+            || IsTakingCurrentTower(localPlayer.EntityId))
+        {
+            e.Enabled = false;
+            return;
+        }
+
+        var currentTowers = GetCurrentTowers();
+        if (currentTowers.Length != 2)
+        {
+            e.Enabled = false;
+            return;
+        }
+
+        var candidates = GetNonRoleSafeSpotCandidates(currentTowers);
+        if (candidates.Length == 0)
+        {
+            e.Enabled = false;
+            return;
+        }
+
+        var currentPosition = localPlayer.Position.ToVector2();
+        var safeSpot = candidates.OrderBy(candidate => Vector2.DistanceSquared(currentPosition, candidate)).First();
+        e.Enabled = true;
+        e.refX = safeSpot.X;
+        e.refY = safeSpot.Y;
+        e.radius = 0.8f;
+        e.color = 0xFF00FF00;
+        e.thicc = 8f;
+        e.Filled = false;
+        e.fillIntensity = 0f;
+        e.tether = true;
+    }
+
+    private Vector2[] GetNonRoleSafeSpotCandidates(uint[] currentTowers)
+    {
+        var directions = currentTowers
+            .Select(tower => MathHelper.GetCardinalDirection(new(100, 100), tower.GetObject().Position.ToVector2()))
+            .Distinct()
+            .ToArray();
+
+        if (directions.Length != 2)
+        {
+            return [];
+        }
+
+        var first = directions[0];
+        var second = directions[1];
+
+        if (AreOpposite(first, second))
+        {
+            return directions.Select(GetTowerSideSafeSpot).ToArray();
+        }
+
+        return [GetBetweenTowersSafeSpot(first, second)];
+    }
+
+    private static bool AreOpposite(CardinalDirection first, CardinalDirection second)
+    {
+        return (first == CardinalDirection.North && second == CardinalDirection.South)
+            || (first == CardinalDirection.South && second == CardinalDirection.North)
+            || (first == CardinalDirection.East && second == CardinalDirection.West)
+            || (first == CardinalDirection.West && second == CardinalDirection.East);
+    }
+
+    private static Vector2 GetTowerSideSafeSpot(CardinalDirection direction)
+    {
+        return direction switch
+        {
+            CardinalDirection.North => new(100f, 91f),
+            CardinalDirection.East => new(109f, 100f),
+            CardinalDirection.South => new(100f, 109f),
+            CardinalDirection.West => new(91f, 100f),
+            _ => new(100f, 100f),
+        };
+    }
+
+    private static Vector2 GetBetweenTowersSafeSpot(CardinalDirection first, CardinalDirection second)
+    {
+        if (HasDirections(first, second, CardinalDirection.North, CardinalDirection.East)) return new(107.071f, 92.928f);
+        if (HasDirections(first, second, CardinalDirection.East, CardinalDirection.South)) return new(107.071f, 107.071f);
+        if (HasDirections(first, second, CardinalDirection.South, CardinalDirection.West)) return new(92.928f, 107.071f);
+        if (HasDirections(first, second, CardinalDirection.West, CardinalDirection.North)) return new(92.928f, 92.928f);
+        return new(100f, 100f);
+    }
+
+    private static bool HasDirections(CardinalDirection first, CardinalDirection second, CardinalDirection expectedFirst, CardinalDirection expectedSecond)
+    {
+        return (first == expectedFirst && second == expectedSecond)
+            || (first == expectedSecond && second == expectedFirst);
     }
 
     private void SwitchTetherSafeSpots(bool enabled)
