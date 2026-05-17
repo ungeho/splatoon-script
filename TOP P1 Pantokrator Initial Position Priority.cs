@@ -33,6 +33,36 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
     private const int FlameGuideDelayMs = 1800;
     private const int FlameGuideDurationMs = 3500;
     private const float SameAxisTolerance = 5f;
+    private static readonly string[] PriorityLayoutElements =
+    [
+        "PriorityHighText",
+        "PriorityHighEastArrow",
+        "PriorityHighNorthArrow",
+        "PriorityLowText",
+        "PriorityLowWestArrow",
+        "PriorityLowSouthArrow",
+    ];
+    private static readonly string[] RotationLayoutElements =
+    [
+        "RotationCwText",
+        "RotationCwArrow1",
+        "RotationCwArrow2",
+        "RotationCwArrow3",
+        "RotationCwArrow4",
+        "RotationCwArrow5",
+        "RotationCwArrow6",
+        "RotationCwArrow7",
+        "RotationCwArrow8",
+        "RotationCcwText",
+        "RotationCcwArrow1",
+        "RotationCcwArrow2",
+        "RotationCcwArrow3",
+        "RotationCcwArrow4",
+        "RotationCcwArrow5",
+        "RotationCcwArrow6",
+        "RotationCcwArrow7",
+        "RotationCcwArrow8",
+    ];
 
     private readonly List<CastRecord> _flameCasts = [];
     private float? _pantokratorAngle = null;
@@ -41,6 +71,7 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
     private long _pantokratorStartedAt = 0;
     private long _firstFlameStartedAt = 0;
     private long _secondFlameStartedAt = 0;
+    private long _directionResolvedAt = 0;
     private string _lastEvent = "";
     private string _lastSkipReason = "";
     private string _lastGuide = "";
@@ -52,42 +83,93 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
 
     public override void OnSetup()
     {
-        Controller.RegisterElementFromCode("Guide", $$"""
+        Controller.RegisterElementFromCode("PriorityHighText", """
         {
             "Name":"",
-            "type":0,
+            "type":1,
             "Enabled":false,
-            "refX":100.0,
-            "refY":100.0,
-            "refZ":0.0,
-            "radius":1.0,
-            "color":{{GuideColor}},
+            "radius":0.0,
             "Filled":false,
-            "fillIntensity":0.2,
-            "overlayBGColor":1879048192,
-            "overlayTextColor":3372220415,
-            "thicc":8.0,
-            "overlayText":"",
-            "tether":true
+            "fillIntensity":0.345,
+            "overlayBGColor":3355443200,
+            "overlayTextColor":3355508731,
+            "overlayVOffset":3.4,
+            "overlayFScale":3.0,
+            "thicc":0.0,
+            "overlayText":"北 or 東",
+            "refActorType":1
         }
         """);
-        Controller.RegisterElementFromCode("PreGuide", $$"""
+        Controller.RegisterElementFromCode("PriorityHighEastArrow", """
         {
             "Name":"",
-            "type":0,
+            "type":3,
             "Enabled":false,
-            "refX":100.0,
-            "refY":100.0,
-            "refZ":0.0,
-            "radius":2.0,
-            "color":{{GuideColor}},
+            "refX":3.0,
+            "radius":0.0,
+            "color":3355508725,
+            "fillIntensity":0.345,
+            "thicc":12.0,
+            "refActorType":1,
+            "LineEndA":1
+        }
+        """);
+        Controller.RegisterElementFromCode("PriorityHighNorthArrow", """
+        {
+            "Name":"",
+            "type":3,
+            "Enabled":false,
+            "refY":-3.0,
+            "radius":0.0,
+            "fillIntensity":0.345,
+            "thicc":12.0,
+            "refActorType":1,
+            "LineEndA":1
+        }
+        """);
+        Controller.RegisterElementFromCode("PriorityLowText", """
+        {
+            "Name":"",
+            "type":1,
+            "Enabled":false,
+            "radius":0.0,
             "Filled":false,
-            "fillIntensity":0.2,
-            "overlayBGColor":1879048192,
-            "overlayTextColor":3372220415,
-            "thicc":8.0,
-            "overlayText":"",
-            "tether":true
+            "fillIntensity":0.345,
+            "overlayBGColor":3355443200,
+            "overlayTextColor":3372218624,
+            "overlayVOffset":3.4,
+            "overlayFScale":3.0,
+            "thicc":0.0,
+            "overlayText":"南 or 西",
+            "refActorType":1
+        }
+        """);
+        Controller.RegisterElementFromCode("PriorityLowWestArrow", """
+        {
+            "Name":"",
+            "type":3,
+            "Enabled":false,
+            "refX":-3.0,
+            "radius":0.0,
+            "color":3372155131,
+            "fillIntensity":0.345,
+            "thicc":12.0,
+            "refActorType":1,
+            "LineEndA":1
+        }
+        """);
+        Controller.RegisterElementFromCode("PriorityLowSouthArrow", """
+        {
+            "Name":"",
+            "type":3,
+            "Enabled":false,
+            "refY":3.0,
+            "radius":0.0,
+            "color":3372217088,
+            "fillIntensity":0.345,
+            "thicc":12.0,
+            "refActorType":1,
+            "LineEndA":1
         }
         """);
         Controller.RegisterElementFromCode("RotationText", """
@@ -108,6 +190,7 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
             "tether":false
         }
         """);
+        RegisterRotationLayoutElements();
     }
 
     public override void OnStartingCast(uint source, uint castId)
@@ -154,19 +237,10 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
             return;
         }
 
-        var position = ResolveGuidePosition(number, pairPriorityIndex);
-        if (position != null)
+        if (IsPriorityLayoutWindow())
         {
             _lastSkipReason = "";
-            MoveGuide("Guide", position.Value);
-            return;
-        }
-
-        var prePosition = ResolvePreGuidePosition(number, pairPriorityIndex);
-        if (prePosition != null)
-        {
-            _lastSkipReason = "";
-            MoveGuide("PreGuide", prePosition.Value);
+            ShowPriorityLayout(pairPriorityIndex == 0);
             UpdateRotationText();
             return;
         }
@@ -235,6 +309,9 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
 
     private void ScanActiveCasts()
     {
+        List<IBattleChara> pantokratorCasters = [];
+        List<IBattleChara> flameCasters = [];
+
         foreach (var caster in Svc.Objects.OfType<IBattleChara>())
         {
             if (caster.CastActionId == PantokratorCast && _pantokratorAngle == null)
@@ -244,11 +321,20 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
                 _lastEvent = $"31501 scan angle={FormatAngle(_pantokratorAngle)}";
             }
 
+            if (caster.CastActionId == PantokratorCast)
+            {
+                pantokratorCasters.Add(caster);
+            }
+
             if (caster.CastActionId == FlameThrowerCast)
             {
+                flameCasters.Add(caster);
                 RecordFlameCast(caster);
             }
         }
+
+        TryResolveFlameDirectionFromActiveCasts(pantokratorCasters, flameCasters);
+        ResolveFlameDirectionFallback();
     }
 
     private void RecordFlameCast(uint source)
@@ -294,8 +380,64 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
         if (_flameCasts.Count == 2 && _firstFlameAngle != null && axisAngle != null)
         {
             _secondFlameStartedAt = Environment.TickCount64;
-            _flameDirection = GetClockwiseDirection(_firstFlameAngle.Value, axisAngle.Value);
         }
+    }
+
+    private void TryResolveFlameDirectionFromActiveCasts(List<IBattleChara> pantokratorCasters, List<IBattleChara> flameCasters)
+    {
+        if (_flameDirection != 0 || pantokratorCasters.Count < 2 || flameCasters.Count < 2)
+        {
+            return;
+        }
+
+        foreach (var pantokratorCaster in pantokratorCasters)
+        {
+            var pantokratorRotation = RotationToDegrees(pantokratorCaster.Rotation);
+            foreach (var flameCaster in flameCasters)
+            {
+                var flameRotation = RotationToDegrees(flameCaster.Rotation);
+                if (MathF.Abs(pantokratorRotation - flameRotation) >= 40f)
+                {
+                    continue;
+                }
+
+                SetFlameDirection(pantokratorRotation > flameRotation ? 1 : -1, $"rotation 31501={pantokratorRotation:0.0} 32368={flameRotation:0.0}");
+                return;
+            }
+        }
+    }
+
+    private void SetFlameDirection(int direction, string reason)
+    {
+        if (direction == 0 || _flameDirection != 0)
+        {
+            return;
+        }
+
+        _flameDirection = direction;
+        if (_directionResolvedAt == 0)
+        {
+            _directionResolvedAt = Environment.TickCount64;
+        }
+
+        _lastEvent = $"Direction {(_flameDirection > 0 ? "CW" : "CCW")} {reason}";
+    }
+
+    private void ResolveFlameDirectionFallback()
+    {
+        if (_flameDirection != 0 || _flameCasts.Count < 2)
+        {
+            return;
+        }
+
+        var firstAngle = _flameCasts[0].Angle;
+        var secondAngle = _flameCasts[1].Angle;
+        if (firstAngle == null || secondAngle == null)
+        {
+            return;
+        }
+
+        SetFlameDirection(GetClockwiseDirection(firstAngle.Value, secondAngle.Value), "axis fallback");
     }
 
     private Vector3? ResolveGuidePosition(int number, int pairPriorityIndex)
@@ -363,19 +505,12 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
 
     private void UpdateRotationText()
     {
-        if (!Controller.TryGetElementByName("RotationText", out var element))
-        {
-            return;
-        }
-
         if (_flameDirection == 0 || !IsRotationTextWindow())
         {
-            element.Enabled = false;
             return;
         }
 
-        element.Enabled = true;
-        element.overlayText = _flameDirection > 0 ? "CW" : "CCW";
+        ShowRotationLayout(_flameDirection > 0);
     }
 
     private float GetPriorityNinetyDegreeAngle(bool highPriority)
@@ -533,8 +668,13 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
 
     private bool IsRotationTextWindow()
     {
-        var age = GetSecondFlameAgeMs();
+        var age = GetDirectionAgeMs();
         return age >= 0 && age <= FlameGuideDelayMs + FlameGuideDurationMs;
+    }
+
+    private bool IsPriorityLayoutWindow()
+    {
+        return _pantokratorStartedAt != 0 && _directionResolvedAt == 0;
     }
 
     private long GetPantokratorAgeMs()
@@ -550,6 +690,11 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
     private long GetSecondFlameAgeMs()
     {
         return _secondFlameStartedAt == 0 ? -1 : Environment.TickCount64 - _secondFlameStartedAt;
+    }
+
+    private long GetDirectionAgeMs()
+    {
+        return _directionResolvedAt == 0 ? -1 : Environment.TickCount64 - _directionResolvedAt;
     }
 
     private static int GetClockwiseDirection(float firstAngle, float secondAngle)
@@ -578,7 +723,12 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
 
     private static float RotationToAngle(float rotation)
     {
-        return NormalizeAngle(rotation * 180f / MathF.PI);
+        return NormalizeAngle(RotationToDegrees(rotation));
+    }
+
+    private static float RotationToDegrees(float rotation)
+    {
+        return rotation * 180f / MathF.PI;
     }
 
     private static float PositionToAngle(Vector3 position)
@@ -653,6 +803,120 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
         element.refZ = position.Y;
     }
 
+    private void ShowPriorityLayout(bool highPriority)
+    {
+        foreach (var name in PriorityLayoutElements)
+        {
+            if (Controller.TryGetElementByName(name, out var element))
+            {
+                element.Enabled = name.StartsWith(highPriority ? "PriorityHigh" : "PriorityLow", StringComparison.Ordinal);
+            }
+        }
+
+        _lastGuide = highPriority ? "Priority 1 N/E" : "Priority 2 S/W";
+    }
+
+    private void ShowRotationLayout(bool clockwise)
+    {
+        foreach (var name in RotationLayoutElements)
+        {
+            if (Controller.TryGetElementByName(name, out var element))
+            {
+                element.Enabled = name.StartsWith(clockwise ? "RotationCw" : "RotationCcw", StringComparison.Ordinal);
+            }
+        }
+
+        _lastGuide = clockwise ? "Clockwise" : "Counter Clockwise";
+    }
+
+    private void RegisterRotationLayoutElements()
+    {
+        Controller.RegisterElementFromCode("RotationCwText", """
+        {
+            "Name":"",
+            "type":1,
+            "Enabled":false,
+            "radius":0.0,
+            "Filled":false,
+            "fillIntensity":0.5,
+            "overlayBGColor":3355443200,
+            "overlayTextColor":3355508484,
+            "overlayFScale":2.0,
+            "thicc":0.0,
+            "overlayText":"Clock Wise",
+            "refActorNPCID":7695,
+            "refActorComparisonType":4,
+            "onlyTargetable":true,
+            "onlyVisible":true
+        }
+        """);
+        RegisterRotationArrow("RotationCwArrow1", 2.0f, null, 1.6383f, 1.14715f, 3355508484, false);
+        RegisterRotationArrow("RotationCwArrow2", 1.41421f, 1.41421f, 0.3473f, 1.96962f, 3355508484, false);
+        RegisterRotationArrow("RotationCwArrow3", null, 2.0f, -1.14715f, 1.6383f, 3355508484, false);
+        RegisterRotationArrow("RotationCwArrow4", -1.41421f, 1.41421f, -1.96962f, 0.3473f, 3355508484, false);
+        RegisterRotationArrow("RotationCwArrow5", -2.0f, null, -1.6383f, -1.14715f, 3355508484, false);
+        RegisterRotationArrow("RotationCwArrow6", -1.41421f, -1.41421f, -0.3473f, -1.96962f, 3355508484, false);
+        RegisterRotationArrow("RotationCwArrow7", null, -2.0f, 1.14715f, -1.6383f, 3355508484, false);
+        RegisterRotationArrow("RotationCwArrow8", 1.41421f, -1.41421f, 1.96962f, -0.3473f, 3355508484, false);
+
+        Controller.RegisterElementFromCode("RotationCcwText", """
+        {
+            "Name":"",
+            "type":1,
+            "Enabled":false,
+            "radius":0.0,
+            "Filled":false,
+            "fillIntensity":0.5,
+            "overlayBGColor":3355443200,
+            "overlayTextColor":3355508700,
+            "overlayFScale":2.0,
+            "thicc":0.0,
+            "overlayText":"Counter Clock Wise",
+            "refActorNPCID":7695,
+            "refActorComparisonType":4,
+            "onlyTargetable":true,
+            "onlyVisible":true
+        }
+        """);
+        RegisterRotationArrow("RotationCcwArrow1", 2.0f, null, 1.6383f, 1.14715f, 3355508712, true);
+        RegisterRotationArrow("RotationCcwArrow2", 1.41421f, 1.41421f, 0.3473f, 1.96962f, 3355508712, true);
+        RegisterRotationArrow("RotationCcwArrow3", null, 2.0f, -1.14715f, 1.6383f, 3355508712, true);
+        RegisterRotationArrow("RotationCcwArrow4", -1.41421f, 1.41421f, -1.96962f, 0.3473f, 3355508712, true);
+        RegisterRotationArrow("RotationCcwArrow5", -2.0f, null, -1.6383f, -1.14715f, 3355508712, true);
+        RegisterRotationArrow("RotationCcwArrow6", -1.41421f, -1.41421f, -0.3473f, -1.96962f, 3355508712, true);
+        RegisterRotationArrow("RotationCcwArrow7", null, -2.0f, 1.14715f, -1.6383f, 3355508712, true);
+        RegisterRotationArrow("RotationCcwArrow8", 1.41421f, -1.41421f, 1.96962f, -0.3473f, 3355508712, true);
+    }
+
+    private void RegisterRotationArrow(string name, float? refX, float? refY, float offX, float offY, uint color, bool lineEndA)
+    {
+        var refXProperty = refX == null ? "" : $@"""refX"":{refX.Value:0.#####},";
+        var refYProperty = refY == null ? "" : $@"""refY"":{refY.Value:0.#####},";
+        var lineEndProperty = lineEndA ? @"""LineEndA"":1" : @"""LineEndB"":1";
+
+        Controller.RegisterElementFromCode(name, $$"""
+        {
+            "Name":"",
+            "type":3,
+            "Enabled":false,
+            {{refXProperty}}
+            {{refYProperty}}
+            "offX":{{offX:0.#####}},
+            "offY":{{offY:0.#####}},
+            "radius":0.0,
+            "color":{{color}},
+            "Filled":false,
+            "fillIntensity":0.5,
+            "thicc":8.0,
+            "refActorNPCID":7695,
+            "refActorComparisonType":4,
+            "onlyTargetable":true,
+            "onlyVisible":true,
+            {{lineEndProperty}}
+        }
+        """);
+    }
+
     private void OffGuide()
     {
         if (Controller.TryGetElementByName("Guide", out var element))
@@ -669,6 +933,22 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
         {
             rotationElement.Enabled = false;
         }
+
+        foreach (var name in PriorityLayoutElements)
+        {
+            if (Controller.TryGetElementByName(name, out var priorityElement))
+            {
+                priorityElement.Enabled = false;
+            }
+        }
+
+        foreach (var name in RotationLayoutElements)
+        {
+            if (Controller.TryGetElementByName(name, out var rotationLayoutElement))
+            {
+                rotationLayoutElement.Enabled = false;
+            }
+        }
     }
 
     private void ResetState()
@@ -680,6 +960,7 @@ internal class TOP_P1_Pantokrator_Initial_Position_Priority : SplatoonScript
         _pantokratorStartedAt = 0;
         _firstFlameStartedAt = 0;
         _secondFlameStartedAt = 0;
+        _directionResolvedAt = 0;
         _lastEvent = "";
         _lastSkipReason = "";
         _lastGuide = "";
